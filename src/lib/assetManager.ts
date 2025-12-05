@@ -39,6 +39,27 @@ export async function createAssetFromContent(
 }
 
 /**
+ * Check if an asset exists by upload ID
+ * Returns true if the asset exists, false if it has been deleted/cancelled
+ */
+export async function assetExists(
+  ctx: PluginContext,
+  uploadId: string
+): Promise<boolean> {
+  const client = buildClient({
+    apiToken: ctx.currentUserAccessToken || '',
+  });
+
+  try {
+    await client.uploads.find(uploadId);
+    return true;
+  } catch (error) {
+    // Asset not found (deleted/cancelled)
+    return false;
+  }
+}
+
+/**
  * Fetch asset content by upload ID
  */
 export async function fetchAssetContent(

@@ -10,7 +10,7 @@ import { Form as FormHandler } from 'react-final-form';
 import JsonTextarea from '../components/JsonTextarea';
 import MigrationWizard from '../components/MigrationWizard';
 import { validateArray, validateGeneralOptions } from '../lib/validators';
-import { createAssetFromContent, fetchAssetContent, ASSET_NAMES } from '../lib/assetManager';
+import { createAssetFromContent, fetchAssetContent, assetExists, ASSET_NAMES } from '../lib/assetManager';
 import s from '../lib/styles.module.css';
 
 type PropTypes = {
@@ -83,9 +83,53 @@ export default function ConfigScreen({ ctx }: PropTypes) {
         return;
       }
 
-      // If we have asset IDs, load their contents
+      // If we have asset IDs, check if they still exist and load their contents
       if (params.iconsAssetId && params.filtersAssetId && params.stylesAssetId) {
         try {
+          // First check if all assets still exist (they may have been deleted/cancelled)
+          const [iconsExists, filtersExists, stylesExists] = await Promise.all([
+            assetExists(ctx, params.iconsAssetId),
+            assetExists(ctx, params.filtersAssetId),
+            assetExists(ctx, params.stylesAssetId),
+          ]);
+
+          const anyAssetMissing = !iconsExists || !filtersExists || !stylesExists;
+
+          if (anyAssetMissing) {
+            // Assets have been deleted, regenerate them with defaults
+            console.warn('Configuration assets were deleted, regenerating with defaults...');
+            ctx.notice('Configuration assets were deleted. Regenerating with default values...');
+
+            const [iconsAssetId, filtersAssetId, stylesAssetId] = await Promise.all([
+              createAssetFromContent(ctx, defaultAssetContents.icons, ASSET_NAMES.ICONS, 'application/json'),
+              createAssetFromContent(ctx, defaultAssetContents.filters, ASSET_NAMES.FILTERS, 'application/json'),
+              createAssetFromContent(ctx, defaultAssetContents.styles, ASSET_NAMES.STYLES, 'text/css'),
+            ]);
+
+            // Update plugin parameters with new asset IDs
+            await ctx.updatePluginParameters({
+              generalOptions: params.generalOptions || defaultGeneralOptions,
+              iconsAssetId,
+              filtersAssetId,
+              stylesAssetId,
+              migratedToAssets: true,
+            });
+
+            setState(current => ({
+              ...current,
+              parameters: {
+                ...current.parameters,
+                iconsAssetId,
+                filtersAssetId,
+                stylesAssetId,
+              },
+              assetContents: defaultAssetContents,
+              loading: false,
+            }));
+            return;
+          }
+
+          // Assets exist, load their contents
           const [iconsContent, filtersContent, stylesContent] = await Promise.all([
             fetchAssetContent(ctx, params.iconsAssetId),
             fetchAssetContent(ctx, params.filtersAssetId),

@@ -3,7 +3,7 @@ import { FC, ReactNode, useState, useEffect } from "react";
 import get from "lodash/get";
 import "./styles.css";
 import { Canvas, TextInput } from "datocms-react-ui";
-import { fetchAssetContent } from "../lib/assetManager";
+import { fetchAssetContent, assetExists } from "../lib/assetManager";
 
 const arrowIcon = "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDQ4IDQ4IiB3aWR0aD0iNDgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTIwIDEybC0yLjgzIDIuODMgOS4xNyA5LjE3LTkuMTcgOS4xNyAyLjgzIDIuODMgMTItMTJ6Ii8+PHBhdGggZD0iTTAgMGg0OHY0OGgtNDh6IiBmaWxsPSJub25lIi8+PC9zdmc+";
 const doubleArrowIcon = "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDQ4IDQ4IiB3aWR0aD0iNDgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEyIDM2bDE3LTEyLTE3LTEydjI0em0yMC0yNHYyNGg0VjEyaC00eiIvPjxwYXRoIGQ9Ik0wIDBoNDh2NDhIMHoiIGZpbGw9Im5vbmUiLz48L3N2Zz4=";
@@ -49,6 +49,19 @@ const IconFontPicker: FC<Props> = ({ ctx }) => {
 
         // Check if we have asset IDs (v2.0)
         if (params.iconsAssetId && params.filtersAssetId && params.stylesAssetId) {
+          // First verify the assets still exist (they may have been deleted/cancelled)
+          const [iconsExists, filtersExists, stylesExists] = await Promise.all([
+            assetExists(ctx, params.iconsAssetId as string),
+            assetExists(ctx, params.filtersAssetId as string),
+            assetExists(ctx, params.stylesAssetId as string),
+          ]);
+
+          if (!iconsExists || !filtersExists || !stylesExists) {
+            setError('Configuration assets were deleted. Please visit the plugin settings to regenerate them.');
+            setLoading(false);
+            return;
+          }
+
           const [iconsContent, filtersContent, stylesContent] = await Promise.all([
             fetchAssetContent(ctx, params.iconsAssetId as string),
             fetchAssetContent(ctx, params.filtersAssetId as string),
