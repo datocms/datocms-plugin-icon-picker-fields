@@ -8,7 +8,7 @@ type PropTypes = {
   onMigrationComplete: () => void;
 };
 
-type MigrationState = 'ready' | 'migrating' | 'completed' | 'error';
+type MigrationState = 'ready' | 'migrating' | 'completed' | 'error' | 'permission_error';
 
 export default function MigrationWizard({ ctx, onMigrationComplete }: PropTypes) {
   const [state, setState] = useState<MigrationState>('ready');
@@ -64,9 +64,21 @@ export default function MigrationWizard({ ctx, onMigrationComplete }: PropTypes)
       }, 2000);
     } catch (err) {
       console.error('Migration error:', err);
-      setState('error');
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
-      ctx.alert('Migration failed. Please try again or contact support.');
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+
+      // Check if this is a permission error (401 or INVALID_AUTHORIZATION_HEADER)
+      const isPermissionError = errorMessage.includes('401') ||
+        errorMessage.includes('INVALID_AUTHORIZATION_HEADER') ||
+        errorMessage.includes('upload-requests');
+
+      if (isPermissionError) {
+        setState('permission_error');
+        ctx.alert('Migration failed: the plugin needs permission to manage uploads.');
+      } else {
+        setState('error');
+        setError(errorMessage);
+        ctx.alert('Migration failed. Please try again or contact support.');
+      }
     }
   };
 
@@ -134,6 +146,26 @@ export default function MigrationWizard({ ctx, onMigrationComplete }: PropTypes)
               Your icon data, filters, and styles are now stored as assets.
               The page will refresh automatically.
             </p>
+          </div>
+        )}
+
+        {state === 'permission_error' && (
+          <div>
+            <p style={{ color: 'red' }}>
+              <strong>Permission Required</strong>
+            </p>
+            <p>
+              The migration failed because this plugin doesn't have the required API access permission.
+              To fix this, you need to enable the <strong>currentUserAccessToken</strong> permission for this plugin.
+            </p>
+            <Button
+              type="button"
+              buttonSize="m"
+              buttonType="primary"
+              onClick={() => setState('ready')}
+            >
+              Try Again
+            </Button>
           </div>
         )}
 

@@ -96,22 +96,34 @@ export default function ConfigScreen({ ctx }: PropTypes) {
           const anyAssetMissing = !iconsExists || !filtersExists || !stylesExists;
 
           if (anyAssetMissing) {
-            // Assets have been deleted, regenerate them with defaults
-            console.warn('Configuration assets were deleted, regenerating with defaults...');
-            ctx.notice('Configuration assets were deleted. Regenerating with default values...');
+            // Some assets have been deleted, regenerate only the missing ones
+            console.warn('Some configuration assets were deleted, regenerating missing ones...');
+            ctx.notice('Some configuration assets were deleted. Regenerating missing ones with default values...');
 
-            const [iconsAssetId, filtersAssetId, stylesAssetId] = await Promise.all([
-              createAssetFromContent(ctx, defaultAssetContents.icons, ASSET_NAMES.ICONS, 'application/json'),
-              createAssetFromContent(ctx, defaultAssetContents.filters, ASSET_NAMES.FILTERS, 'application/json'),
-              createAssetFromContent(ctx, defaultAssetContents.styles, ASSET_NAMES.STYLES, 'text/css'),
+            // Regenerate only missing assets
+            const newIconsAssetId = iconsExists
+              ? params.iconsAssetId
+              : await createAssetFromContent(ctx, defaultAssetContents.icons, ASSET_NAMES.ICONS, 'application/json');
+            const newFiltersAssetId = filtersExists
+              ? params.filtersAssetId
+              : await createAssetFromContent(ctx, defaultAssetContents.filters, ASSET_NAMES.FILTERS, 'application/json');
+            const newStylesAssetId = stylesExists
+              ? params.stylesAssetId
+              : await createAssetFromContent(ctx, defaultAssetContents.styles, ASSET_NAMES.STYLES, 'text/css');
+
+            // Load content from existing assets, use defaults for missing ones
+            const [iconsContent, filtersContent, stylesContent] = await Promise.all([
+              iconsExists ? fetchAssetContent(ctx, params.iconsAssetId) : Promise.resolve(defaultAssetContents.icons),
+              filtersExists ? fetchAssetContent(ctx, params.filtersAssetId) : Promise.resolve(defaultAssetContents.filters),
+              stylesExists ? fetchAssetContent(ctx, params.stylesAssetId) : Promise.resolve(defaultAssetContents.styles),
             ]);
 
             // Update plugin parameters with new asset IDs
             await ctx.updatePluginParameters({
               generalOptions: params.generalOptions || defaultGeneralOptions,
-              iconsAssetId,
-              filtersAssetId,
-              stylesAssetId,
+              iconsAssetId: newIconsAssetId,
+              filtersAssetId: newFiltersAssetId,
+              stylesAssetId: newStylesAssetId,
               migratedToAssets: true,
             });
 
@@ -119,11 +131,15 @@ export default function ConfigScreen({ ctx }: PropTypes) {
               ...current,
               parameters: {
                 ...current.parameters,
-                iconsAssetId,
-                filtersAssetId,
-                stylesAssetId,
+                iconsAssetId: newIconsAssetId,
+                filtersAssetId: newFiltersAssetId,
+                stylesAssetId: newStylesAssetId,
               },
-              assetContents: defaultAssetContents,
+              assetContents: {
+                icons: iconsContent,
+                filters: filtersContent,
+                styles: stylesContent,
+              },
               loading: false,
             }));
             return;
