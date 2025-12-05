@@ -6,11 +6,29 @@ DatoCMS plugin to visually select icons from any icon font.
 
 ## Features
 
-- **self-contained**: list of icons and icon font (as base64) are stored in the plugin settings -> can be used with any icon font
+- **self-contained**: list of icons and icon font (as base64) are stored as DatoCMS assets -> can be used with any icon font
 - **search**: icons can be searched
 - **filters**: optional filters can be used to show only a subset of icons, based on their names
 
 [Preview](https://raw.githubusercontent.com/datocms/datocms-plugin-icon-picker-fields/main/docs/preview.gif)
+
+## Version 2.0.0 - Breaking Changes
+
+Version 2.0.0 introduces a new storage mechanism for better performance and scalability:
+
+- **Icons, filters, and CSS styles are now stored as DatoCMS assets** instead of in plugin parameters
+- **Automatic migration**: When upgrading from v1.x, the plugin will automatically prompt you to migrate your existing configuration
+- **Backwards compatibility**: The migration process preserves all your current settings
+
+### Upgrading from v1.x
+
+1. Update the plugin to v2.0.0
+2. Open the plugin settings page
+3. Click "Start Migration" when prompted
+4. Your configuration will be automatically converted to assets
+5. The page will refresh, and you're done!
+
+The migration is one-time and cannot be undone. Your general options (like `iconPrefix`) will remain in plugin settings.
 
 ## Configuration
 
@@ -18,11 +36,18 @@ DatoCMS plugin to visually select icons from any icon font.
 
 [Plugin settings](https://raw.githubusercontent.com/datocms/datocms-plugin-icon-picker-fields/main/docs/plugin-settings.png)
 
+After installation (or migration from v1.x), the plugin stores three assets:
+- `icon-picker-fields-icons.json`: List of icon names
+- `icon-picker-fields-filters.json`: Filter definitions
+- `icon-picker-fields-styles.css`: Icon font CSS styles
+
+These assets are managed automatically through the plugin settings interface.
+
 #### General Options
 
 A field that holds general options in JSON format.
 
-- **iconPrefix**: if the icon font requires a prefix CSS class to show up (eg. `my-prefix icon-arrow-right`), you an add it here (optional)
+- **iconPrefix**: if the icon font requires a prefix CSS class to show up (eg. `my-prefix icon-arrow-right`), you can add it here (optional)
 
 #### Icon Names (required)
 

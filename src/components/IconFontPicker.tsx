@@ -1,8 +1,9 @@
 import { RenderFieldExtensionCtx } from "datocms-plugin-sdk";
-import { FC, ReactNode, useRef, useState } from "react";
+import { FC, ReactNode, useState, useEffect } from "react";
 import get from "lodash/get";
 import "./styles.css";
 import { Canvas, TextInput } from "datocms-react-ui";
+import { fetchAssetContent, assetExists } from "../lib/assetManager";
 
 const arrowIcon = "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDQ4IDQ4IiB3aWR0aD0iNDgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTIwIDEybC0yLjgzIDIuODMgOS4xNyA5LjE3LTkuMTcgOS4xNyAyLjgzIDIuODMgMTItMTJ6Ii8+PHBhdGggZD0iTTAgMGg0OHY0OGgtNDh6IiBmaWxsPSJub25lIi8+PC9zdmc+";
 const doubleArrowIcon = "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiA/PjxzdmcgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDQ4IDQ4IiB3aWR0aD0iNDgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTEyIDM2bDE3LTEyLTE3LTEydjI0em0yMC0yNHYyNGg0VjEyaC00eiIvPjxwYXRoIGQ9Ik0wIDBoNDh2NDhIMHoiIGZpbGw9Im5vbmUiLz48L3N2Zz4=";
@@ -36,15 +37,92 @@ const IconFontPicker: FC<Props> = ({ ctx }) => {
   const [selectedIcon, setSelectedIcon] = useState(
     typeof initialValue === "string" ? JSON.parse(initialValue) : null
   );
+  const [configSettings, setConfigSettings] = useState<ConfigSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const configSettings = useRef<ConfigSettings>({
-    filters: JSON.parse(ctx.plugin.attributes.parameters.filters as string) as ConfigFilter[],
-    styles: ctx.plugin.attributes.parameters.styles as string || "",
-    icons: JSON.parse(ctx.plugin.attributes.parameters.icons as string) as string[],
-    generalOptions: JSON.parse(ctx.plugin.attributes.parameters.generalOptions as string) as GeneralOptions,
-  });
+  // Load configuration from assets
+  useEffect(() => {
+    const loadConfiguration = async () => {
+      try {
+        const params = ctx.plugin.attributes.parameters;
 
-  const iconPrefix = configSettings.current.generalOptions.iconPrefix || "";
+        // Check if we have asset IDs (v2.0)
+        if (params.iconsAssetId && params.filtersAssetId && params.stylesAssetId) {
+          // First verify the assets still exist (they may have been deleted/cancelled)
+          const [iconsExists, filtersExists, stylesExists] = await Promise.all([
+            assetExists(ctx, params.iconsAssetId as string),
+            assetExists(ctx, params.filtersAssetId as string),
+            assetExists(ctx, params.stylesAssetId as string),
+          ]);
+
+          if (!iconsExists || !filtersExists || !stylesExists) {
+            setError('Configuration assets were deleted. Please visit the plugin settings to regenerate them.');
+            setLoading(false);
+            return;
+          }
+
+          const [iconsContent, filtersContent, stylesContent] = await Promise.all([
+            fetchAssetContent(ctx, params.iconsAssetId as string),
+            fetchAssetContent(ctx, params.filtersAssetId as string),
+            fetchAssetContent(ctx, params.stylesAssetId as string),
+          ]);
+
+          const generalOptions = params.generalOptions
+            ? JSON.parse(params.generalOptions as string)
+            : { iconPrefix: "" };
+
+          setConfigSettings({
+            icons: JSON.parse(iconsContent),
+            filters: JSON.parse(filtersContent),
+            styles: stylesContent,
+            generalOptions,
+          });
+        }
+        // Fallback to legacy parameters (v1.x) - shouldn't happen after migration
+        else if (params.icons && params.filters && params.styles) {
+          setConfigSettings({
+            filters: JSON.parse(params.filters as string) as ConfigFilter[],
+            styles: params.styles as string || "",
+            icons: JSON.parse(params.icons as string) as string[],
+            generalOptions: JSON.parse(params.generalOptions as string) as GeneralOptions,
+          });
+        } else {
+          setError('Configuration not found. Please configure the plugin in settings.');
+        }
+
+        setLoading(false);
+      } catch (err) {
+        console.error('Failed to load configuration:', err);
+        setError('Failed to load configuration. Please check plugin settings.');
+        setLoading(false);
+      }
+    };
+
+    loadConfiguration();
+  }, [ctx]);
+
+  if (loading) {
+    return (
+      <Canvas ctx={ctx}>
+        <div style={{ padding: '20px' }}>
+          <p>Loading configuration...</p>
+        </div>
+      </Canvas>
+    );
+  }
+
+  if (error || !configSettings) {
+    return (
+      <Canvas ctx={ctx}>
+        <div style={{ padding: '20px', color: 'red' }}>
+          <p>{error || 'Configuration error'}</p>
+        </div>
+      </Canvas>
+    );
+  }
+
+  const iconPrefix = configSettings.generalOptions.iconPrefix || "";
 
   const handleIconClick = (icon: string) => {
     setSelectedIcon({ icon: icon });
@@ -69,7 +147,7 @@ const IconFontPicker: FC<Props> = ({ ctx }) => {
     return activeFilters?.every((el) => text.match(new RegExp(el, "i")));
   };
 
-  const allIcons = [...configSettings.current.icons]
+  const allIcons = [...configSettings.icons]
     .filter((icon) => multiSearchAnd(icon))
     .filter((icon) => {
       if (searchTerm) {
@@ -94,9 +172,9 @@ const IconFontPicker: FC<Props> = ({ ctx }) => {
   );
   const totalPages = Math.ceil(allIcons.length / pageSize);
 
-  const filters: ReactNode | undefined = configSettings.current.filters?.length && (
+  const filters: ReactNode | undefined = configSettings.filters?.length && (
     <div className="filters">
-      {configSettings.current.filters.map((x, index) => (
+      {configSettings.filters.map((x, index) => (
         <label key={`${x.value}_${index}`}>
           <input
             type="checkbox"
@@ -112,7 +190,7 @@ const IconFontPicker: FC<Props> = ({ ctx }) => {
 
   return (
     <Canvas ctx={ctx}>
-      <style>{configSettings.current.styles}</style>
+      <style>{configSettings.styles}</style>
       <div className="App">
         {!selectedIcon && (
           <>
