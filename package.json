@@ -5,7 +5,7 @@
     "type": "git",
     "url": "https://github.com/datocms/datocms-plugin-icon-picker-fields"
   },
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "DatoCMS plugin to visually select icon from any icon font.",
   "dependencies": {
     "@datocms/cma-client-browser": "^5.1.29",
@@ -71,6 +71,6 @@
     "coverImage": "docs/cover.png",
     "previewImage": "docs/preview.gif",
     "entryPoint": "build/index.html",
-    "permissions": []
+    "permissions": ["currentUserAccessToken"]
   }
 }
